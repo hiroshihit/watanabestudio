@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Painel — WatanabeStudio</title>
+  <style>
+    :root { --bg:#0a0a0b; --card:#131416; --line:#26282c; --text:#eceef1; --muted:#9aa0a8; --ok:#25d366; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; padding-bottom:6rem; }
+    header { position:sticky; top:0; z-index:10; background:#000d; backdrop-filter:blur(10px); border-bottom:1px solid var(--line); padding:.8rem 1rem; display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; }
+    header h1 { font-size:1.05rem; margin:0 auto 0 0; }
+    main { max-width:980px; margin:0 auto; padding:1rem; }
+    .info { background:#101a14; border:1px solid #1d4a31; color:#bfe9cf; border-radius:12px; padding:1rem; margin:1rem 0; }
+    .info ol { margin:.4rem 0 0 1.2rem; padding:0; }
+    details { background:var(--card); border:1px solid var(--line); border-radius:14px; margin:1rem 0; }
+    summary { cursor:pointer; padding:1rem 1.2rem; font-weight:700; font-size:1.05rem; list-style:none; }
+    summary::before { content:"▸ "; color:var(--muted); } details[open] summary::before { content:"▾ "; }
+    .body { padding:0 1.2rem 1.2rem; display:grid; gap:.8rem; }
+    label { display:grid; gap:.25rem; font-size:.82rem; color:var(--muted); }
+    input[type=text], input[type=number], textarea, select { width:100%; background:#0a0b0c; color:var(--text); border:1px solid #33363b; border-radius:10px; padding:.65rem .75rem; font:inherit; }
+    textarea { min-height:84px; resize:vertical; }
+    input:focus, textarea:focus, select:focus { outline:2px solid #fff6; }
+    .row { display:grid; gap:.6rem; padding:.9rem; border:1px solid var(--line); border-radius:12px; background:#0e0f11; grid-template-columns: 2fr 3fr 1fr; align-items:end; }
+    .row .full { grid-column: 1 / -1; }
+    .row .checks { display:flex; gap:1rem; flex-wrap:wrap; align-items:center; color:var(--text); font-size:.9rem; }
+    .grow { display:grid; grid-template-columns: 1.4fr 1fr 2fr; gap:.6rem; padding:.9rem; border:1px solid var(--line); border-radius:12px; background:#0e0f11; align-items:end; }
+    button { font:inherit; cursor:pointer; border-radius:10px; border:1px solid #3a3d43; background:#1a1c1f; color:var(--text); padding:.6rem 1rem; }
+    button:hover { border-color:#fff; }
+    .primary { background:var(--ok); color:#04130a; border-color:transparent; font-weight:700; }
+    .danger { color:#ff8d8d; border-color:#5b2a2a; }
+    .group-title { font-weight:700; margin-top:.4rem; }
+    .toast { position:fixed; left:50%; bottom:1.5rem; transform:translateX(-50%); background:#fff; color:#000; padding:.7rem 1.1rem; border-radius:999px; font-weight:600; opacity:0; pointer-events:none; transition:opacity .3s; }
+    .toast.show { opacity:1; }
+    @media (max-width:720px) { .row, .grow { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Painel do WatanabeStudio</h1>
+    <button id="btnReset" title="Descarta rascunho e volta ao config.js atual">Recarregar do site</button>
+    <button id="btnCopy">Copiar config.js</button>
+    <button id="btnDownload" class="primary">Baixar config.js</button>
+  </header>
+
+  <main>
+    <div class="info">
+      <strong>Como usar</strong>
+      <ol>
+        <li>Altere o que quiser abaixo (preços, textos, telefone, fotos...).</li>
+        <li>Clique em <b>Baixar config.js</b>.</li>
+        <li>Substitua o arquivo <code>js/config.js</code> do projeto por esse novo arquivo e publique novamente (veja o LEIAME).</li>
+      </ol>
+      <p style="margin:.6rem 0 0">Este painel <b>não publica nada sozinho</b>: ele só prepara o arquivo. Suas alterações ficam salvas como rascunho neste navegador.</p>
+    </div>
+    <div id="app"></div>
+  </main>
+  <div class="toast" id="toast"></div>
+
+  <script src="../js/config.js"></script>
+  <script>
+  (function () {
+    var KEY = "watanabe_admin_draft_v1";
+    var original = JSON.parse(JSON.stringify(window.SITE_CONFIG));
+    var cfg;
+    try { cfg = JSON.parse(localStorage.getItem(KEY)) || JSON.parse(JSON.stringify(original)); } catch (e) { cfg = JSON.parse(JSON.stringify(original)); }
+    var app = document.getElementById("app");
+    var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" })[c]; }); };
+    var save = function () { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} };
+    var toast = function (m) { var t = document.getElementById("toast"); t.textContent = m; t.classList.add("show"); setTimeout(function () { t.classList.remove("show"); }, 1800); };
+    var get = function (p) { return p.split(".").reduce(function (o, k) { return o == null ? o : o[k]; }, cfg); };
+    var set = function (p, v) { var k = p.split("."), last = k.pop(), o = k.reduce(function (o, x) { return o[x]; }, cfg); o[last] = v; save(); };
+
+    function field(label, path, opts) {
+      opts = opts || {};
+      var v = get(path);
+      var tag = opts.area ? '<textarea data-p="' + path + '">' + esc(v) + "</textarea>" : '<input type="text" data-p="' + path + '" value="' + esc(v) + '">';
+      return "<label>" + label + tag + "</label>";
+    }
+
+    /* Editor genérico para o bloco "textos" */
+    function genericEditor(obj, path) {
+      var html = "";
+      Object.keys(obj).forEach(function (k) {
+        var p = path + "." + k, v = obj[k];
+        if (typeof v === "string") {
+          html += '<label>' + esc(k) + (v.length > 70 ? '<textarea data-p="' + p + '">' + esc(v) + "</textarea>" : '<input type="text" data-p="' + p + '" value="' + esc(v) + '">') + "</label>";
+        } else if (Array.isArray(v) && v.every(function (x) { return typeof x === "string"; })) {
+          html += '<label>' + esc(k) + " (um por linha)<textarea data-arr data-p=\"" + p + '">' + esc(v.join("\n")) + "</textarea></label>";
+        } else if (Array.isArray(v)) {
+          html += '<div class="group-title">' + esc(k) + "</div>" + v.map(function (it, i) {
+            return '<div class="grow" style="grid-template-columns:1fr 2fr">' + Object.keys(it).map(function (kk) {
+              return "<label>" + esc(kk) + '<input type="text" data-p="' + p + "." + i + "." + kk + '" value="' + esc(it[kk]) + '"></label>';
+            }).join("") + "</div>";
+          }).join("");
+        } else if (v && typeof v === "object") {
+          html += '<div class="group-title">' + esc(k) + "</div>" + genericEditor(v, p);
+        }
+      });
+      return html;
+    }
+
+    function serviceRows(key) {
+      var g = cfg.servicos[key];
+      return '<div class="body">' + field("Título do grupo", "servicos." + key + ".titulo") + field("Observação exibida abaixo dos cards", "servicos." + key + ".observacao", { area: true }) +
+        g.itens.map(function (s, i) {
+          var b = "servicos." + key + ".itens." + i;
+          return '<div class="row"><label>Nome<input type="text" data-p="' + b + '.nome" value="' + esc(s.nome) + '"></label>' +
+            '<label>Descrição<input type="text" data-p="' + b + '.descricao" value="' + esc(s.descricao) + '"></label>' +
+            '<label>Preço (R$)<input type="number" step="0.01" min="0" data-num data-p="' + b + '.preco" value="' + esc(s.preco) + '"></label>' +
+            '<div class="full checks"><label style="display:flex;gap:.4rem;align-items:center;color:inherit"><input type="checkbox" data-bool data-p="' + b + '.aPartirDe"' + (s.aPartirDe ? " checked" : "") + '> "A partir de"</label>' +
+            '<label style="display:flex;gap:.4rem;align-items:center;color:inherit"><input type="checkbox" data-bool data-p="' + b + '.destaque"' + (s.destaque ? " checked" : "") + '> Destacar "Mais pedido"</label>' +
+            '<span style="flex:1"></span><button class="danger" data-act="del-serv" data-k="' + key + '" data-i="' + i + '">Remover</button></div></div>';
+        }).join("") + '<button data-act="add-serv" data-k="' + key + '">+ Adicionar serviço</button></div>';
+    }
+
+    function galleryRows() {
+      var cats = cfg.galeriaCategorias.filter(function (c) { return c.id !== "todos"; });
+      return '<div class="body"><p class="muted" style="color:var(--muted);margin:0">Copie a foto para <code>assets/img/galeria/</code> e informe o caminho abaixo (ex.: <code>assets/img/galeria/meu-carro.jpg</code>).</p>' +
+        cfg.galeria.map(function (f, i) {
+          return '<div class="grow"><label>Caminho da foto<input type="text" data-p="galeria.' + i + '.src" value="' + esc(f.src) + '"></label>' +
+            '<label>Categoria<select data-p="galeria.' + i + '.categoria">' + cats.map(function (c) { return '<option value="' + c.id + '"' + (c.id === f.categoria ? " selected" : "") + ">" + esc(c.nome) + "</option>"; }).join("") + "</select></label>" +
+            '<label>Legenda<input type="text" data-p="galeria.' + i + '.titulo" value="' + esc(f.titulo) + '"></label>' +
+            '<button class="danger" data-act="del-gal" data-i="' + i + '" style="grid-column:1/-1;justify-self:end">Remover foto</button></div>';
+        }).join("") + '<button data-act="add-gal">+ Adicionar foto</button></div>';
+    }
+
+    function render() {
+      var open = {}; Array.prototype.forEach.call(app.querySelectorAll("details"), function (d, i) { open[i] = d.open; });
+      app.innerHTML =
+        '<details open><summary>Empresa, contato e Google</summary><div class="body">' +
+          field("Nome da empresa", "empresa.nome") + field("Caminho da logo (ex.: assets/logo.png — vazio usa letreiro automático)", "empresa.logo") +
+          field("Slogan do rodapé", "empresa.slogan") + field("Endereço do site (ex.: https://seusite.com.br/)", "empresa.urlSite") +
+          field("Título que aparece no Google", "empresa.seoTitulo") + field("Descrição que aparece no Google", "empresa.seoDescricao", { area: true }) +
+          field("WhatsApp — só números com 55 + DDD (ex.: 5511930507027)", "whatsapp.numero") + field("WhatsApp — como aparece escrito", "whatsapp.numeroExibicao") +
+          field("Mensagem dos botões gerais", "whatsapp.mensagemPadrao", { area: true }) + field("Mensagem ao escolher serviço ({servico} e {categoria} são automáticos)", "whatsapp.mensagemServico", { area: true }) +
+          field("Rua e número", "endereco.rua") + field("Bairro", "endereco.bairro") + field("Cidade", "endereco.cidade") + field("UF", "endereco.uf") +
+          field("Endereço para o mapa e a rota (pode incluir o CEP)", "endereco.buscaMapa") +
+        "</div></details>" +
+        "<details><summary>Serviços — Carros</summary>" + serviceRows("carros") + "</details>" +
+        "<details><summary>Serviços — Motos</summary>" + serviceRows("motos") + "</details>" +
+        "<details><summary>Galeria de fotos</summary>" + galleryRows() + "</details>" +
+        '<details><summary>Textos do site</summary><div class="body">' + genericEditor(cfg.textos, "textos") + "</div></details>";
+      Array.prototype.forEach.call(app.querySelectorAll("details"), function (d, i) { if (i in open) d.open = open[i]; });
+    }
+
+    app.addEventListener("input", function (e) {
+      var el = e.target, p = el.dataset.p; if (!p) return;
+      var v = el.value;
+      if (el.hasAttribute("data-num")) v = parseFloat(String(v).replace(",", ".")) || 0;
+      if (el.hasAttribute("data-arr")) v = v.split("\n").map(function (x) { return x.trim(); }).filter(Boolean);
+      set(p, v);
+    });
+    app.addEventListener("change", function (e) {
+      var el = e.target; if (el.hasAttribute("data-bool")) {
+        var p = el.dataset.p; if (el.checked) set(p, true); else { var k = p.split("."), last = k.pop(), o = k.reduce(function (o, x) { return o[x]; }, cfg); delete o[last]; save(); }
+      }
+    });
+    app.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-act]"); if (!b) return;
+      var a = b.dataset.act, i = +b.dataset.i, k = b.dataset.k;
+      if (a === "add-serv") cfg.servicos[k].itens.push({ nome: "Novo serviço", descricao: "Descrição do serviço.", preco: 0 });
+      if (a === "del-serv" && confirm("Remover este serviço?")) cfg.servicos[k].itens.splice(i, 1);
+      if (a === "add-gal") cfg.galeria.push({ src: "assets/img/galeria/nova-foto.jpg", categoria: "carros", titulo: "Nova foto" });
+      if (a === "del-gal" && confirm("Remover esta foto da galeria?")) cfg.galeria.splice(i, 1);
+      save(); render();
+    });
+
+    function build() {
+      return "/* WATANABESTUDIO — ARQUIVO CENTRAL DE CONFIGURAÇÃO\n   Gerado pelo painel em " + new Date().toLocaleString("pt-BR") + ".\n   Pode ser editado à mão também (veja o LEIAME). */\n\nwindow.SITE_CONFIG = " + JSON.stringify(cfg, null, 2) + ";\n";
+    }
+    document.getElementById("btnDownload").onclick = function () {
+      var blob = new Blob([build()], { type: "text/javascript" }), a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = "config.js"; document.body.appendChild(a); a.click(); a.remove(); toast("config.js baixado — substitua em js/config.js");
+    };
+    document.getElementById("btnCopy").onclick = function () {
+      (navigator.clipboard ? navigator.clipboard.writeText(build()) : Promise.reject()).then(function () { toast("Copiado!"); }, function () { toast("Não foi possível copiar — use Baixar"); });
+    };
+    document.getElementById("btnReset").onclick = function () {
+      if (confirm("Descartar o rascunho e recarregar os dados do config.js atual?")) { localStorage.removeItem(KEY); cfg = JSON.parse(JSON.stringify(original)); render(); toast("Recarregado"); }
+    };
+    render();
+  })();
+  </script>
+</body>
+</html>
